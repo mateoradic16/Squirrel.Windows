@@ -7,8 +7,8 @@ namespace Squirrel
 {
     public interface IFileDownloader
     {
-        Task DownloadFile(string url, string targetFile, Action<int> progress);
-        Task<byte[]> DownloadUrl(string url);
+        Task DownloadFile(string url, string targetFile, Action<int> progress, string accessToken = null);
+        Task<byte[]> DownloadUrl(string url, string accessToken = null);
     }
 
     public class FileDownloader : IFileDownloader, IEnableLogger
@@ -20,9 +20,9 @@ namespace Squirrel
             _providedClient = providedClient;
         }
 
-        public async Task DownloadFile(string url, string targetFile, Action<int> progress)
+        public async Task DownloadFile(string url, string targetFile, Action<int> progress, string accessToken = null)
         {
-            using (var wc = _providedClient ?? Utility.CreateWebClient()) {
+            using (var wc = _providedClient ?? Utility.CreateWebClient(accessToken)) {
                 var failedUrl = default(string);
 
                 var lastSignalled = DateTime.MinValue;
@@ -57,23 +57,22 @@ namespace Squirrel
             }
         }
 
-        public async Task<byte[]> DownloadUrl(string url)
+        public async Task<byte[]> DownloadUrl(string url, string accessToken = null)
         {
-            using (var wc = _providedClient ?? Utility.CreateWebClient()) {
+            using (var wc = Utility.CreateWebClient(accessToken)) {
             var failedUrl = default(string);
-
-        retry:
+            retry:
             try {
                 this.Log().Info("Downloading url: " + (failedUrl ?? url));
-
+                    Console.WriteLine("Downloading url: " + (failedUrl ?? url));
                 return await this.WarnIfThrows(() => wc.DownloadDataTaskAsync(failedUrl ?? url),
                     "Failed to download url: " + (failedUrl ?? url));
-            } catch (Exception) {
+            } catch (Exception ex) {
                 // NB: Some super brain-dead services are case-sensitive yet 
                 // corrupt case on upload. I can't even.
                 if (failedUrl != null) throw;
-
-                failedUrl = url.ToLower();
+                    Console.WriteLine(ex);
+                failedUrl = url;
                 goto retry;
             }
         }

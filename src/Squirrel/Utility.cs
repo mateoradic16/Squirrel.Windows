@@ -102,7 +102,7 @@ namespace Squirrel
             }
         }
 
-        public static WebClient CreateWebClient()
+        public static WebClient CreateWebClient(string accessToken = null)
         {
             // enable TLS support
             // TLS 1.0 and 1.1 are enabled for backward compatibility and should be disabled in the future
@@ -115,12 +115,15 @@ namespace Squirrel
             ServicePointManager.SecurityProtocol &= ~SecurityProtocolType.Ssl3;
 
             var ret = new WebClient();
-            var wp = WebRequest.DefaultWebProxy;
-            if (wp != null) {
-                wp.Credentials = CredentialCache.DefaultCredentials;
-                ret.Proxy = wp;
+            if(!string.IsNullOrEmpty(accessToken))
+            {
+                ret.Headers["Authorization"] = "token " + accessToken;
+                ret.Headers["Accept"] = "application/octet-stream";
+                ret.Headers["Accept-Encoding"] = "gzip, deflate";
+                ret.Headers["User-Agent"] = "Mozilla / 5.0(Windows NT 6.2; WOW64; rv: 19.0) Gecko / 20100101 Firefox / 19.0";
+                ret.Headers["Accept-Charset"] = "ISO-8859-1";
             }
-
+            
             return ret;
         }
 

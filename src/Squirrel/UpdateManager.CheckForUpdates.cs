@@ -26,7 +26,9 @@ namespace Squirrel
                 string updateUrlOrPath,
                 bool ignoreDeltaUpdates = false,
                 Action<int> progress = null,
-                IFileDownloader urlDownloader = null)
+                IFileDownloader urlDownloader = null,
+                Release latestRelease = null,
+                string accessToken = null)
             {
                 progress = progress ?? (_ => { });
 
@@ -56,7 +58,44 @@ namespace Squirrel
 
                 // Fetch the remote RELEASES file, whether it's a local dir or an
                 // HTTP URL
-                if (Utility.IsHttpUrl(updateUrlOrPath)) {
+                if(latestRelease != null)
+                {
+                    updateUrlOrPath = latestRelease.Assets.Where(asset => asset.Name == "RELEASES").FirstOrDefault().Url;
+                    
+                    this.Log().Info("Downloading RELEASES file from {0}", updateUrlOrPath);
+
+                    int retries = 3;
+
+                retry:
+
+                    try
+                    {
+                        var uri = new Uri(updateUrlOrPath);
+
+                        if (latestLocalRelease != null)
+                        {
+                            uri = Utility.AddQueryParamsToUri(uri, new Dictionary<string, string> {
+                                { "id", latestLocalRelease.PackageName },
+                                { "localVersion", latestLocalRelease.Version.ToString() },
+                                { "arch", Environment.Is64BitOperatingSystem ? "amd64" : "x86" }
+                            });
+                        }
+
+                        Console.WriteLine(uri.ToString());
+                        var data = await urlDownloader.DownloadUrl(uri.ToString(), accessToken);
+                        releaseFile = Encoding.UTF8.GetString(data);
+                    }
+                    catch (WebException ex)
+                    {
+                        this.Log().InfoException("Download resulted in WebException (returning blank release list)", ex);
+                        if (retries <= 0) throw;
+                        retries--;
+                        goto retry;
+                    }
+
+                    progress(33);
+                }
+                else if (Utility.IsHttpUrl(updateUrlOrPath)) {
                     if (updateUrlOrPath.EndsWith("/")) {
                         updateUrlOrPath = updateUrlOrPath.Substring(0, updateUrlOrPath.Length - 1);
                     }
@@ -78,6 +117,7 @@ namespace Squirrel
                             });
                         }
 
+                        Console.WriteLine(uri.ToString());
                         var data = await urlDownloader.DownloadUrl(uri.ToString());
                         releaseFile = Encoding.UTF8.GetString(data);
                     } catch (WebException ex) {

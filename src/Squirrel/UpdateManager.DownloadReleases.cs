@@ -19,7 +19,7 @@ namespace Squirrel
                 this.rootAppDirectory = rootAppDirectory;
             }
 
-            public async Task DownloadReleases(string updateUrlOrPath, IEnumerable<ReleaseEntry> releasesToDownload, Action<int> progress = null, IFileDownloader urlDownloader = null)
+            public async Task DownloadReleases(string updateUrlOrPath, IEnumerable<ReleaseEntry> releasesToDownload, Action<int> progress = null, IFileDownloader urlDownloader = null, Release latestRelease = null, string accessToken = null)
             {
                 progress = progress ?? (_ => { });
                 urlDownloader = urlDownloader ?? new FileDownloader();
@@ -27,8 +27,25 @@ namespace Squirrel
 
                 double current = 0;
                 double toIncrement = 100.0 / releasesToDownload.Count();
+                if(latestRelease != null)
+                {
+                    await releasesToDownload.ForEachAsync(async x => {
+                        var targetFile = Path.Combine(packagesDirectory, x.Filename);
+                        double component = 0;
+                        var updateUrlOrPath = latestRelease.Assets.Where(asset => asset.Name == x.Filename).FirstOrDefault().Url;
+                        await downloadRelease(updateUrlOrPath, null, urlDownloader, targetFile, p => {
+                            lock (progress)
+                            {
+                                current -= component;
+                                component = toIncrement / 100.0 * p;
+                                progress((int)Math.Round(current += component));
+                            }
+                        }, accessToken);
 
-                if (Utility.IsHttpUrl(updateUrlOrPath)) {
+                        checksumPackage(x);
+                    });
+                }
+                else if (Utility.IsHttpUrl(updateUrlOrPath)) {
                     // From Internet
                     await releasesToDownload.ForEachAsync(async x => {
                         var targetFile = Path.Combine(packagesDirectory, x.Filename);
@@ -65,18 +82,26 @@ namespace Squirrel
                     Uri.IsWellFormedUriString(x.BaseUrl, UriKind.Absolute);
             }
 
-            Task downloadRelease(string updateBaseUrl, ReleaseEntry releaseEntry, IFileDownloader urlDownloader, string targetFile, Action<int> progress)
+            Task downloadRelease(string updateBaseUrl, ReleaseEntry releaseEntry, IFileDownloader urlDownloader, string targetFile, Action<int> progress, string accessToken = null)
             {
                 var baseUri = Utility.EnsureTrailingSlash(new Uri(updateBaseUrl));
-
-                var releaseEntryUrl = releaseEntry.BaseUrl + releaseEntry.Filename;
-                if (!String.IsNullOrEmpty(releaseEntry.Query)) {
-                    releaseEntryUrl += releaseEntry.Query;
+                string sourceFileUrl;
+                if(releaseEntry != null)
+                {
+                    var releaseEntryUrl = releaseEntry.BaseUrl + releaseEntry.Filename;
+                    if (!String.IsNullOrEmpty(releaseEntry.Query))
+                    {
+                        releaseEntryUrl += releaseEntry.Query;
+                    }
+                    sourceFileUrl = new Uri(baseUri, releaseEntryUrl).AbsoluteUri;
                 }
-                var sourceFileUrl = new Uri(baseUri, releaseEntryUrl).AbsoluteUri;
+                else
+                {
+                    sourceFileUrl = updateBaseUrl;
+                }
                 File.Delete(targetFile);
 
-                return urlDownloader.DownloadFile(sourceFileUrl, targetFile, progress);
+                return urlDownloader.DownloadFile(sourceFileUrl, targetFile, progress, accessToken);
             }
 
             Task checksumAllPackages(IEnumerable<ReleaseEntry> releasesDownloaded)

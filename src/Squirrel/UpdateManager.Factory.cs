@@ -24,6 +24,23 @@ namespace Squirrel
 
             [DataMember(Name = "html_url")]
             public string HtmlUrl { get; set; }
+
+            [DataMember(Name = "url")]
+            public string Url { get; set; }
+
+            [DataMember(Name = "assets")]
+            public List<Asset> Assets { get; set; }
+        }
+
+        [DataContract]
+        public class Asset
+        {
+            [DataMember(Name = "name")]
+            public string Name { get; set; }
+            [DataMember(Name = "url")]
+            public string Url { get; set; }
+            [DataMember(Name = "id")]
+            public long Id { get; set; }
         }
 
         public static async Task<UpdateManager> GitHubUpdateManager(
@@ -45,8 +62,6 @@ namespace Squirrel
                 .Append(repoUri.AbsolutePath)
                 .Append("/releases");
 
-            if (!string.IsNullOrWhiteSpace(accessToken))
-                releasesApiBuilder.Append("?access_token=").Append(accessToken);
             
             Uri baseAddress;
 
@@ -64,19 +79,31 @@ namespace Squirrel
             // above ^^ notice the end slashes for the baseAddress, explained here: http://stackoverflow.com/a/23438417/162694
 
             using (var client = new HttpClient() { BaseAddress = baseAddress }) {
+
                 client.DefaultRequestHeaders.UserAgent.Add(userAgent);
+                Console.WriteLine(accessToken);
+                if (!string.IsNullOrWhiteSpace(accessToken))
+                    client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("token", accessToken);
                 var response = await client.GetAsync(releasesApiBuilder.ToString());
+                Console.WriteLine(response.ToString());
                 response.EnsureSuccessStatusCode();
-
                 var releases = SimpleJson.DeserializeObject<List<Release>>(await response.Content.ReadAsStringAsync());
-                var latestRelease = releases
-                    .Where(x => prerelease || !x.Prerelease)
-                    .OrderByDescending(x => x.PublishedAt)
-                    .First();
+                if(releases.Count > 0)
+                {
+                    var latestRelease = releases
+                        .Where(x => prerelease || !x.Prerelease)
+                        .OrderByDescending(x => x.PublishedAt)
+                        .First();
+                    Console.WriteLine(latestRelease.HtmlUrl);
+                    Console.WriteLine(Json.SimpleJson.SerializeObject(latestRelease.Assets));
+                    var latestReleaseUrl = latestRelease.Url;
 
-                var latestReleaseUrl = latestRelease.HtmlUrl.Replace("/tag/", "/download/");
-
-                return new UpdateManager(latestReleaseUrl, applicationName, rootDirectory, urlDownloader);
+                    return new UpdateManager(latestReleaseUrl, applicationName, rootDirectory, urlDownloader, latestRelease, accessToken);
+                }
+                else
+                {
+                    return null;
+                }
             }
         }
     }

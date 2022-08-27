@@ -153,9 +153,11 @@ namespace Squirrel
             var updateInfo = default(UpdateInfo);
 
             try {
+                Console.WriteLine("Checking for Updates...");
                 updateInfo = await This.ErrorIfThrows(() => This.CheckForUpdate(ignoreDeltaUpdates, x => progress(x / 3)),
                     "Failed to check for updates");
 
+                Console.WriteLine("Downloading Releases...");
                 await This.ErrorIfThrows(() =>
                     This.DownloadReleases(updateInfo.ReleasesToApply, x => progress(x / 3 + 33)),
                     "Failed to download updates");

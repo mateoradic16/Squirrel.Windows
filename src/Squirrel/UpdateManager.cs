@@ -26,18 +26,24 @@ namespace Squirrel
         readonly string applicationName;
         readonly IFileDownloader urlDownloader;
         readonly string updateUrlOrPath;
+        readonly Release latestRelease;
+        readonly string accessToken;
 
         IDisposable updateLock;
 
         public UpdateManager(string urlOrPath, 
             string applicationName = null,
             string rootDirectory = null,
-            IFileDownloader urlDownloader = null)
+            IFileDownloader urlDownloader = null,
+            Release latestRelease_ = null,
+            string accessToken_ = null)
         {
             Contract.Requires(!String.IsNullOrEmpty(urlOrPath));
             Contract.Requires(!String.IsNullOrEmpty(applicationName));
 
             updateUrlOrPath = urlOrPath;
+            latestRelease = latestRelease_;
+            this.accessToken = accessToken_;
             this.applicationName = applicationName ?? UpdateManager.getApplicationName();
             this.urlDownloader = urlDownloader ?? new FileDownloader();
 
@@ -54,7 +60,7 @@ namespace Squirrel
             var checkForUpdate = new CheckForUpdateImpl(rootAppDirectory);
 
             await acquireUpdateLock();
-            return await checkForUpdate.CheckForUpdate(intention, Utility.LocalReleaseFileForAppDir(rootAppDirectory), updateUrlOrPath, ignoreDeltaUpdates, progress, urlDownloader);
+            return await checkForUpdate.CheckForUpdate(intention, Utility.LocalReleaseFileForAppDir(rootAppDirectory), updateUrlOrPath, ignoreDeltaUpdates, progress, urlDownloader, latestRelease, accessToken);
         }
 
         public async Task DownloadReleases(IEnumerable<ReleaseEntry> releasesToDownload, Action<int> progress = null)
@@ -62,7 +68,7 @@ namespace Squirrel
             var downloadReleases = new DownloadReleasesImpl(rootAppDirectory);
             await acquireUpdateLock();
 
-            await downloadReleases.DownloadReleases(updateUrlOrPath, releasesToDownload, progress, urlDownloader);
+            await downloadReleases.DownloadReleases(updateUrlOrPath, releasesToDownload, progress, urlDownloader, latestRelease, accessToken);
         }
 
         public async Task<string> ApplyReleases(UpdateInfo updateInfo, Action<int> progress = null)
